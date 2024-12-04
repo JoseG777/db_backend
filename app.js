@@ -75,11 +75,12 @@ async function getUserData(username, userQuestion) {
     const prompt = `
       The user has the following goal: ${goal}.
       Health notes: ${healthNotes}.
-      They consumed a total of ${totalCalories} calories this week and worked out on ${totalWorkoutDays} days.
+      They consumed a total of ${totalCalories * 100} calories this week and worked out on ${totalWorkoutDays} days.
       Workouts done: ${exerciseLogs.rows.map((log) => log.exercise_name).join(', ') || 'No workouts logged'}.
       User's question: "${userQuestion}".
       Based on this information, provide a suggestion in 2-3 sentences.
     `;
+    console.log(prompt)
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
@@ -88,8 +89,21 @@ async function getUserData(username, userQuestion) {
       temperature: 0.7,
     });
 
+    const suggestion = completion.choices[0].message.content.trim();
+
+    const deleteQuery = 'DELETE FROM suggestions WHERE user_id = $1';
+    await pool.query(deleteQuery, [userId]);
+
+    const insertQuery = `
+      INSERT INTO suggestions (user_id, suggestion_content, suggestion_date)
+      VALUES ($1, $2, NOW())
+      RETURNING suggestion_content
+    `;
+    const insertResult = await pool.query(insertQuery, [userId, suggestion]);
+
     return {
-      suggestion: completion.choices[0].message.content.trim(),
+      suggestion,
+      suggestion_id: insertResult.rows[0].suggestion_id,
     };
   } catch (error) {
     console.error('Error fetching user data or generating suggestion:', error.message);
