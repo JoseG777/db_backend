@@ -33,7 +33,7 @@ checkDatabaseConnection();
 
 async function getUserData(username, userQuestion) {
   try {
-    const userQuery = 'SELECT user_id FROM users WHERE user_username = $1';
+    const userQuery = 'SELECT user_id FROM users_pg WHERE user_username = $1';
     const userResult = await pool.query(userQuery, [username]);
 
     if (userResult.rows.length === 0) {
@@ -44,23 +44,23 @@ async function getUserData(username, userQuestion) {
 
     const foodLogsQuery = `
       SELECT f.food_calories, w.workout_date
-      FROM foods f
-      JOIN workouts w ON f.workout_id = w.workout_id
+      FROM foods_pg f
+      JOIN workouts_pg w ON f.workout_id = w.workout_id
       WHERE w.user_id = $1
     `;
     const foodLogs = await pool.query(foodLogsQuery, [userId]);
 
     const exerciseLogsQuery = `
       SELECT e.exercise_name, e.exercise_type, e.exercise_duration, w.workout_date
-      FROM exercises e
-      JOIN workouts w ON e.workout_id = w.workout_id
+      FROM exercises_pg e
+      JOIN workouts_pg w ON e.workout_id = w.workout_id
       WHERE w.user_id = $1
     `;
     const exerciseLogs = await pool.query(exerciseLogsQuery, [userId]);
-
+    
     const goalQuery = `
       SELECT goal_description, health_notes
-      FROM goals
+      FROM goals_pg
       WHERE goal_id = $1
     `;
     const goalResult = await pool.query(goalQuery, [userId]);
@@ -75,12 +75,12 @@ async function getUserData(username, userQuestion) {
     const prompt = `
       The user has the following goal: ${goal}.
       Health notes: ${healthNotes}.
-      They consumed a total of ${totalCalories * 100} calories this week and worked out on ${totalWorkoutDays} days.
+      They consumed a total of ${totalCalories} calories this week and worked out on ${totalWorkoutDays} days.
       Workouts done: ${exerciseLogs.rows.map((log) => log.exercise_name).join(', ') || 'No workouts logged'}.
       User's question: "${userQuestion}".
       Based on this information, provide a suggestion in 2-3 sentences.
     `;
-    console.log(prompt)
+    console.log(prompt);
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
@@ -91,13 +91,13 @@ async function getUserData(username, userQuestion) {
 
     const suggestion = completion.choices[0].message.content.trim();
 
-    const deleteQuery = 'DELETE FROM suggestions WHERE user_id = $1';
+    const deleteQuery = 'DELETE FROM suggestions_pg WHERE user_id = $1';
     await pool.query(deleteQuery, [userId]);
 
     const insertQuery = `
-      INSERT INTO suggestions (user_id, suggestion_content, suggestion_date)
+      INSERT INTO suggestions_pg (user_id, suggestion_content, suggestion_date)
       VALUES ($1, $2, NOW())
-      RETURNING suggestion_content
+      RETURNING suggestion_content, suggestion_id
     `;
     const insertResult = await pool.query(insertQuery, [userId, suggestion]);
 
